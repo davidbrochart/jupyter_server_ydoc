@@ -13,6 +13,8 @@ from jupyter_server.utils import ensure_async
 from jupyter_ydoc import ydocs as YDOCS  # type: ignore
 from tornado import web
 from tornado.websocket import WebSocketHandler
+from traitlets import Int, Unicode
+from traitlets.config import LoggingConfigurable
 from ypy_websocket.websocket_server import WebsocketServer, YRoom  # type: ignore
 from ypy_websocket.ystore import (  # type: ignore
     BaseYStore,
@@ -29,9 +31,28 @@ class JupyterTempFileYStore(TempFileYStore):
     prefix_dir = "jupyter_ystore_"
 
 
-class JupyterSQLiteYStore(SQLiteYStore):
-    db_path = ".jupyter_ystore.db"
-    document_ttl = None
+class JupyterSQLiteYStoreMetaclass(type(LoggingConfigurable), type(SQLiteYStore)):  # type: ignore
+    pass
+
+
+class JupyterSQLiteYStore(LoggingConfigurable, SQLiteYStore, metaclass=JupyterSQLiteYStoreMetaclass):
+    db_path = Unicode(
+        ".jupyter_ystore.db",
+        config=True,
+        help="""The path to the YStore database. Defaults to '.jupyter_ystore.db' in the current
+        directory. Only applicable if the YStore is an SQLiteYStore.""",
+    )
+
+    document_ttl = Int(
+        None,
+        allow_none=True,
+        config=True,
+        help="""The document time-to-live in seconds. Defaults to None (document history is never
+        cleared). Only applicable if the YStore is an SQLiteYStore.""",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
 class DocumentRoom(YRoom):
@@ -61,6 +82,7 @@ class JupyterWebsocketServer(WebsocketServer):
     def __init__(self, *args, **kwargs):
         self.ystore_class = kwargs.pop("ystore_class")
         self.log = kwargs["log"]
+        self.config = kwargs.pop("config")
         super().__init__(*args, **kwargs)
         self.ypatch_nb = 0
         self.connected_users = {}
@@ -81,7 +103,7 @@ class JupyterWebsocketServer(WebsocketServer):
                 file_format, file_type, file_path = path.split(":", 2)
                 p = Path(file_path)
                 updates_file_path = str(p.parent / f".{file_type}:{p.name}.y")
-                ystore = self.ystore_class(path=updates_file_path, log=self.log)
+                ystore = self.ystore_class(path=updates_file_path, log=self.log, config=self.config)
                 self.rooms[path] = DocumentRoom(file_type, ystore, self.log)
             else:
                 # it is a transient document (e.g. awareness)
@@ -162,7 +184,11 @@ class YDocWebSocketHandler(WebSocketHandler, JupyterHandler):
         ystore_class = self.settings["collaborative_ystore_class"]
         if self.websocket_server is None:
             YDocWebSocketHandler.websocket_server = JupyterWebsocketServer(
-                rooms_ready=False, auto_clean_rooms=False, ystore_class=ystore_class, log=self.log
+                rooms_ready=False,
+                auto_clean_rooms=False,
+                ystore_class=ystore_class,
+                log=self.log,
+                config=self.config,
             )
         self._message_queue = asyncio.Queue()
         self.lock = asyncio.Lock()
