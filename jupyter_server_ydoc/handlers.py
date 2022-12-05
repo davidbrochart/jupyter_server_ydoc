@@ -42,7 +42,7 @@ class JupyterSQLiteYStore(
         ".jupyter_ystore.db",
         config=True,
         help="""The path to the YStore database. Defaults to '.jupyter_ystore.db' in the current
-        directory. Only applicable if the YStore is an SQLiteYStore.""",
+        directory.""",
     )
 
     document_ttl = Int(
@@ -50,7 +50,7 @@ class JupyterSQLiteYStore(
         allow_none=True,
         config=True,
         help="""The document time-to-live in seconds. Defaults to None (document history is never
-        cleared). Only applicable if the YStore is an SQLiteYStore.""",
+        cleared).""",
     )
 
 
@@ -81,7 +81,6 @@ class JupyterWebsocketServer(WebsocketServer):
     def __init__(self, *args, **kwargs):
         self.ystore_class = kwargs.pop("ystore_class")
         self.log = kwargs["log"]
-        self.config = kwargs.pop("config")
         super().__init__(*args, **kwargs)
         self.ypatch_nb = 0
         self.connected_users = {}
@@ -102,7 +101,7 @@ class JupyterWebsocketServer(WebsocketServer):
                 file_format, file_type, file_path = path.split(":", 2)
                 p = Path(file_path)
                 updates_file_path = str(p.parent / f".{file_type}:{p.name}.y")
-                ystore = self.ystore_class(path=updates_file_path, log=self.log, config=self.config)
+                ystore = self.ystore_class(path=updates_file_path, log=self.log)
                 self.rooms[path] = DocumentRoom(file_type, ystore, self.log)
             else:
                 # it is a transient document (e.g. awareness)
@@ -184,12 +183,13 @@ class YDocWebSocketHandler(WebSocketHandler, JupyterHandler):
     async def open(self, path):
         ystore_class = self.settings["collaborative_ystore_class"]
         if self.websocket_server is None:
+            for k, v in self.config.get(ystore_class.__name__, {}).items():
+                setattr(ystore_class, k, v)
             YDocWebSocketHandler.websocket_server = JupyterWebsocketServer(
                 rooms_ready=False,
                 auto_clean_rooms=False,
                 ystore_class=ystore_class,
                 log=self.log,
-                config=self.config,
             )
         self._message_queue = asyncio.Queue()
         self.lock = asyncio.Lock()
