@@ -35,7 +35,9 @@ class JupyterSQLiteYStoreMetaclass(type(LoggingConfigurable), type(SQLiteYStore)
     pass
 
 
-class JupyterSQLiteYStore(LoggingConfigurable, SQLiteYStore, metaclass=JupyterSQLiteYStoreMetaclass):
+class JupyterSQLiteYStore(
+    LoggingConfigurable, SQLiteYStore, metaclass=JupyterSQLiteYStoreMetaclass
+):
     db_path = Unicode(
         ".jupyter_ystore.db",
         config=True,
@@ -50,9 +52,6 @@ class JupyterSQLiteYStore(LoggingConfigurable, SQLiteYStore, metaclass=JupyterSQ
         help="""The document time-to-live in seconds. Defaults to None (document history is never
         cleared). Only applicable if the YStore is an SQLiteYStore.""",
     )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 
 class DocumentRoom(YRoom):
@@ -164,7 +163,9 @@ class YDocWebSocketHandler(WebSocketHandler, JupyterHandler):
         assert file_path is not None
         if file_path != self.room.document.path:
             self.log.debug(
-                "File with ID %s was moved from %s to %s", self.room.document.path, file_path
+                "File with ID %s was moved from %s to %s",
+                self.room.document.path,
+                file_path,
             )
             self.room.document.path = file_path
         return file_format, file_type, file_path
@@ -296,7 +297,8 @@ class YDocWebSocketHandler(WebSocketHandler, JupyterHandler):
             # filter out message depending on changes
             if skip:
                 self.log.debug(
-                    "Filtered out Y message of type: %s", YMessageType(message_type).name
+                    "Filtered out Y message of type: %s",
+                    YMessageType(message_type).name,
                 )
                 return skip
         self._message_queue.put_nowait(message)
